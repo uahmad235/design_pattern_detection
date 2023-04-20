@@ -5,6 +5,8 @@ from tqdm import tqdm
 
 GITHUB_API = "https://api.github.com/search/repositories"
 QUERY = "android+language:java"
+# Alternative query
+# QUERY = "android+language:java+topic:android-architecture"
 DELAY = 10  # Delay in seconds between requests
 
 headers = {
