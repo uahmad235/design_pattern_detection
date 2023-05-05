@@ -2,9 +2,9 @@
 
 The BigBIRD project aims to classify design patterns in software projects using state-of-the-art transformer models, specifically Google's Big BIRD model. This repository contains two notebooks:
 
-* `BigBIRD_Classification_Head_Design_Pattern_Detection.ipynb:` This notebook uses the features extracted by BigBIRD and applies classification using classical models like Logistic Regression, Random Forest, Catboost, XGBoost, and LightGBM to detect design patterns in software projects.
-
 * `Big_Bird_Tuning.ipynb:` This notebook uses unsupervised tuning of BigBIRD model over 1400 Android repos extracted from GitHub.
+
+* `BigBIRD_Classification_Head_Design_Pattern_Detection.ipynb:` This notebook uses the features extracted by BigBIRD and applies classification using classical models like Logistic Regression, Random Forest, Catboost, XGBoost, and LightGBM to detect design patterns in software projects.
 
 ## Installation
 To run these notebooks, you will need the following dependencies:
