@@ -227,12 +227,12 @@ def upload_file_handler():
         prediction = model.predict(pooled_output_pca)
         prediction = prediction[0][0]
         # Determine design pattern based on prediction
-        if prediction == 0:
+        if prediction == 0:  # {'MVC': 0, 'MVP': 1, 'MVVM': 2, 'NONE': 3}
             pattern = "MVC"
         elif prediction == 1:
-            pattern = "MVVM"
-        elif prediction == 2:
             pattern = "MVP"
+        elif prediction == 2:
+            pattern = "MVVM"
         else:
             pattern = "No design pattern detected"
         # Render the result page with the predicted design pattern and file count
