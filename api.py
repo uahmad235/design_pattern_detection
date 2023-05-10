@@ -217,7 +217,7 @@ def upload_file_handler():
         pooled_output_pca = pca.transform(np.array(sum_pooled_output).reshape(1, -1))
 
         # Load CatBoost model
-        with open('models/trained_cb.pkl', 'rb') as f:
+        with open('models/xgb_trained.pkl', 'rb') as f:
             model = pickle.load(f)
 
         # Make prediction using CatBoost model
