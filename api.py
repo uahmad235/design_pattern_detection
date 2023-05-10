@@ -16,22 +16,100 @@ app = Flask(__name__)
 def upload_file():
    return render_template('upload.html')
 
+from transformers import AutoTokenizer, BigBirdModel
+
+import torch
+from typing import List
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device
+
+
+from pathlib import Path
+
+model_name = "google/bigbird-roberta-base"
+model_path = "/home/ahmad/Desktop/api/models/embedder_model/checkpoint-16000/"
+
+tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+PAD = tokenizer.pad_token
+CLS = tokenizer.cls_token
+SEP = tokenizer.sep_token
+MAX_LEN = tokenizer.model_max_length
+BASE = Path('./coach_repos_zip')
+assert MAX_LEN == 4096
+
+
+
+def load_model(model_path):
+    model = BigBirdModel.from_pretrained(model_path).to(device)
+    return model
+
+
+def pad_max_len(tok_ids: List[int], max_len = MAX_LEN) -> List[int]:
+    """Pad sequence to max length i.e., 512"""
+    pad_len = max_len - len(tok_ids) 
+    padding = [tokenizer.convert_tokens_to_ids(PAD)] * pad_len
+    return tok_ids + padding
+
+def get_input_mask(toks_padded: List[int]):
+    """Calculate attention mask
+     - 1 for tokens that are not masked,
+     - 0 for tokens that are masked."""
+
+    return np.where(np.array(toks_padded) == tokenizer.convert_tokens_to_ids(PAD), 0, 1).tolist()
+
+
+
+model = load_model(model_path)
+
+
+def tokenize_sequence(code: str):
+    
+    code_tokens = tokenizer.tokenize(code)
+    tokens = [tokenizer.cls_token] + [tokenizer.sep_token] + code_tokens + [tokenizer.sep_token]
+    tokens_ids = tokenizer.convert_tokens_to_ids(tokens)
+    
+    if len(tokens_ids) >= MAX_LEN:
+        tokens_ids = tokens_ids[:MAX_LEN]
+    
+    padded_token_ids = pad_max_len(tokens_ids)
+    mask_ids = get_input_mask(padded_token_ids)
+    return padded_token_ids, mask_ids
+
+
+def embed_multiple(codes: List[str]):
+    
+    embeddings = []
+    with torch.no_grad():
+      for code in codes:
+          tok_ids, att_mask = tokenize_sequence(code)
+          context_embeddings = model(input_ids=torch.Tensor(tok_ids)[None, :].long().to(device),\
+                            attention_mask=torch.Tensor(att_mask)[None, :].to(device)).pooler_output  #  [0] refers to last_hidden_states
+          # print("context_embeddings: ", context_embeddings.pooler_output.shape)
+          if not embeddings:
+              embeddings.append(context_embeddings)#[:,0, :])
+          else:
+              embeddings.append(context_embeddings) #[:,0, :])
+              emb_mean = torch.sum(torch.stack(embeddings),  axis=0)
+              embeddings = [emb_mean]
+      # print(embeddings)
+      if len(embeddings) == 1:
+          return torch.Tensor(embeddings[0])
+    return torch.squeeze(embeddings[0], axis=0)
+
+
+
 # Function to process .java files in a given directory
 def process_java_files(repo_dir):
     # Define the path to the directory where the model files are located
-    model_path = "/home/ahmad/Desktop/api/models/embedder_model/checkpoint-16000/"
-    # Load the model configuration
-    config = AutoConfig.from_pretrained(model_path)
-    # Load the model
-    model = AutoModel.from_pretrained(model_path, config=config)
-    # Load the tokenizer
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-cased")
 
-    sum_pooled_output = None  # Initialize sum of pooled outputs
+    # sum_pooled_output = None  # Initialize sum of pooled outputs
     file_count = 0  # Initialize file count
+    
+    all_codes = []
 
     # Walk through all directories and files in the repo directory
-    for dirpath, dirnames, filenames in os.walk(repo_dir):
+    for dirpath, _, filenames in os.walk(repo_dir):
         for filename in filenames:
             if filename.endswith(".java"):  # Process only .java files
                 file_path = os.path.join(dirpath, filename)
@@ -39,28 +117,30 @@ def process_java_files(repo_dir):
                 # Read the file content
                 with open(file_path, "r") as f:
                     code = f.read()
+                all_codes.append(code)
 
-                # Tokenize the code
-                tokens = tokenizer.encode(code, add_special_tokens=True, truncation=True, max_length=768)
-                inputs = torch.tensor([tokens])
+                # # Tokenize the code
+                # tokens = tokenizer.encode(code, add_special_tokens=True, truncation=True, max_length=768)
+                # inputs = torch.tensor([tokens])
 
-                # Perform inference
-                with torch.no_grad():
-                    outputs = model(inputs)
+                # # Perform inference
+                # with torch.no_grad():
+                #     outputs = model(inputs)
 
-                # Pool the output of the model over the sequence length dimension
-                # (batch_size = 1, sequence_length = undefiend, hidden_size = 768 in BErt)
-                # (1, number of tokens, length of outpt)
-                pooled_output = torch.tensor(outputs.last_hidden_state[0, 0, :])
+                # # Pool the output of the model over the sequence length dimension
+                # # (batch_size = 1, sequence_length = undefiend, hidden_size = 768 in BErt)
+                # # (1, number of tokens, length of outpt)
+                # pooled_output = torch.tensor(outputs.last_hidden_state[0, 0, :])
 
-                # Sum the pooled outputs
-                if sum_pooled_output is None:
-                    sum_pooled_output = pooled_output	
-                else:
-                    sum_pooled_output += pooled_output
+                # # Sum the pooled outputs
+                # if sum_pooled_output is None:
+                #     sum_pooled_output = pooled_output	
+                # else:
+                #     sum_pooled_output += pooled_output
 
                 file_count += 1  # Increment file count
 
+    sum_pooled_output = embed_multiple(all_codes)
     return sum_pooled_output, file_count
 
 # Function to process the repository directory
