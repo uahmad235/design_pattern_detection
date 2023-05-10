@@ -77,24 +77,27 @@ def tokenize_sequence(code: str):
     return padded_token_ids, mask_ids
 
 
+
 def embed_multiple(codes: List[str]):
     
     embeddings = []
     with torch.no_grad():
-      for code in codes:
-          tok_ids, att_mask = tokenize_sequence(code)
-          context_embeddings = model(input_ids=torch.Tensor(tok_ids)[None, :].long().to(device),\
-                            attention_mask=torch.Tensor(att_mask)[None, :].to(device)).pooler_output  #  [0] refers to last_hidden_states
-          # print("context_embeddings: ", context_embeddings.pooler_output.shape)
-          if not embeddings:
-              embeddings.append(context_embeddings)#[:,0, :])
-          else:
-              embeddings.append(context_embeddings) #[:,0, :])
-              emb_mean = torch.sum(torch.stack(embeddings),  axis=0)
-              embeddings = [emb_mean]
-      # print(embeddings)
-      if len(embeddings) == 1:
-          return torch.Tensor(embeddings[0])
+        for code in codes:
+            tok_ids, att_mask = tokenize_sequence(code)
+            #           print(tok_ids, att_mask)
+#             print("attn_mask: ", att_mask)
+            context_embeddings = model(input_ids=torch.Tensor(tok_ids)[None, :].long().to(device),\
+                            attention_mask=torch.Tensor(att_mask)[None, :].long().to(device))[0] # .pooler_output  #  [0] refers to last_hidden_states
+            # print("context_embeddings: ", context_embeddings.pooler_output.shape)
+            if not embeddings:
+                embeddings.append(context_embeddings[:,0, :])#[:,0, :])
+            else:
+                embeddings.append(context_embeddings[:,0, :]) #[:,0, :])
+                emb_mean = torch.sum(torch.stack(embeddings),  axis=0)
+                embeddings = [emb_mean]
+        # print(embeddings)
+        if len(embeddings) == 1:
+            return torch.Tensor(embeddings[0])
     return torch.squeeze(embeddings[0], axis=0)
 
 
