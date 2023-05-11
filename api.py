@@ -8,6 +8,11 @@ import pickle
 import numpy as np
 import catboost
 from catboost import CatBoostClassifier
+from transformers import AutoTokenizer, BigBirdModel
+import torch
+from typing import List
+from pathlib import Path
+
 
 app = Flask(__name__)
 
@@ -16,18 +21,11 @@ app = Flask(__name__)
 def upload_file():
    return render_template('upload.html')
 
-from transformers import AutoTokenizer, BigBirdModel
-
-import torch
-from typing import List
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device
-
-
-from pathlib import Path
 
 model_name = "google/bigbird-roberta-base"
-model_path = "/home/ahmad/Desktop/api/models/embedder_model/checkpoint-16000/"
+# model_path = "/home/ahmad/Desktop/api/models/embedder_model/checkpoint-16000/"
+model_path = "/home/ahmad/Desktop/api/models/final_model_bigbird/checkpoint-48000/"
 
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -37,7 +35,6 @@ SEP = tokenizer.sep_token
 MAX_LEN = tokenizer.model_max_length
 BASE = Path('./coach_repos_zip')
 assert MAX_LEN == 4096
-
 
 
 def load_model(model_path):
@@ -57,7 +54,6 @@ def get_input_mask(toks_padded: List[int]):
      - 0 for tokens that are masked."""
 
     return np.where(np.array(toks_padded) == tokenizer.convert_tokens_to_ids(PAD), 0, 1).tolist()
-
 
 
 model = load_model(model_path)
@@ -225,7 +221,7 @@ def upload_file_handler():
 
         # Make prediction using CatBoost model
         prediction = model.predict(pooled_output_pca)
-        prediction = prediction[0][0]
+        prediction = prediction[0] if isinstance(prediction, np.ndarray) else prediction
         # Determine design pattern based on prediction
         if prediction == 0:  # {'MVC': 0, 'MVP': 1, 'MVVM': 2, 'NONE': 3}
             pattern = "MVC"
