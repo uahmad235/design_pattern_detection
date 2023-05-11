@@ -113,7 +113,7 @@ def process_java_files(repo_dir):
                 file_path = os.path.join(dirpath, filename)
 
                 # Read the file content
-                with open(file_path, "r") as f:
+                with open(file_path, "r", errors='ignore') as f:
                     code = f.read()
                 all_codes.append(code)
 
