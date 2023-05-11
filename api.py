@@ -3,11 +3,11 @@ import os
 import zipfile
 import shutil
 from transformers import AutoConfig, AutoModel, AutoTokenizer
-import torch
+# import torch
 import pickle
 import numpy as np
-import catboost
-from catboost import CatBoostClassifier
+# import catboost
+# from catboost import CatBoostClassifier
 from transformers import AutoTokenizer, BigBirdModel
 import torch
 from typing import List
@@ -23,10 +23,10 @@ def upload_file():
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-model_name = "google/bigbird-roberta-base"
-# model_path = "/home/ahmad/Desktop/api/models/embedder_model/checkpoint-16000/"
-model_path = "/home/ahmad/Desktop/api/models/final_model_bigbird/checkpoint-48000/"
+print("device: ", device)
 
+model_name = "google/bigbird-roberta-base"
+model_path = "/home/usman/Desktop/final_model_bigbird/checkpoint-48000"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 
 PAD = tokenizer.pad_token
@@ -35,6 +35,9 @@ SEP = tokenizer.sep_token
 MAX_LEN = tokenizer.model_max_length
 BASE = Path('./coach_repos_zip')
 assert MAX_LEN == 4096
+
+
+np.random.seed(42)
 
 
 def load_model(model_path):
@@ -80,11 +83,8 @@ def embed_multiple(codes: List[str]):
     with torch.no_grad():
         for code in codes:
             tok_ids, att_mask = tokenize_sequence(code)
-            #           print(tok_ids, att_mask)
-#             print("attn_mask: ", att_mask)
             context_embeddings = model(input_ids=torch.Tensor(tok_ids)[None, :].long().to(device),\
                             attention_mask=torch.Tensor(att_mask)[None, :].long().to(device))[0] # .pooler_output  #  [0] refers to last_hidden_states
-            # print("context_embeddings: ", context_embeddings.pooler_output.shape)
             if not embeddings:
                 embeddings.append(context_embeddings[:,0, :])#[:,0, :])
             else:
@@ -102,7 +102,6 @@ def embed_multiple(codes: List[str]):
 def process_java_files(repo_dir):
     # Define the path to the directory where the model files are located
 
-    # sum_pooled_output = None  # Initialize sum of pooled outputs
     file_count = 0  # Initialize file count
     
     all_codes = []
@@ -117,25 +116,6 @@ def process_java_files(repo_dir):
                 with open(file_path, "r") as f:
                     code = f.read()
                 all_codes.append(code)
-
-                # # Tokenize the code
-                # tokens = tokenizer.encode(code, add_special_tokens=True, truncation=True, max_length=768)
-                # inputs = torch.tensor([tokens])
-
-                # # Perform inference
-                # with torch.no_grad():
-                #     outputs = model(inputs)
-
-                # # Pool the output of the model over the sequence length dimension
-                # # (batch_size = 1, sequence_length = undefiend, hidden_size = 768 in BErt)
-                # # (1, number of tokens, length of outpt)
-                # pooled_output = torch.tensor(outputs.last_hidden_state[0, 0, :])
-
-                # # Sum the pooled outputs
-                # if sum_pooled_output is None:
-                #     sum_pooled_output = pooled_output	
-                # else:
-                #     sum_pooled_output += pooled_output
 
                 file_count += 1  # Increment file count
 
@@ -192,9 +172,21 @@ def process_repo_folder(repo_dir):
 def upload_file_handler():
     if request.method == 'POST':
         # Get the uploaded file
-        f = request.files['file']
+        rf = request.files['file']
+        rf.filename = 'data.zip'
         # Save the uploaded file
-        f.save(f.filename)
+        rf.save(rf.filename)
+
+        # Load PCA model
+        with open('models/pca.pkl', 'rb') as f:
+            pca = pickle.load(f)
+
+        # Load CatBoost model
+        with open('models/xgb_trained.pkl', 'rb') as f:
+            model = pickle.load(f)
+
+        f = rf
+        print("loading some file: ", f)
         # Unzip the uploaded file
         with zipfile.ZipFile(f.filename, "r") as zip_ref:
             # filename without extenstion
@@ -203,25 +195,22 @@ def upload_file_handler():
         # Process the unzipped repository directory
         process_repo_folder(os.path.splitext(f.filename)[0])
         # Process .java files in the unzipped repository directory
+        print("processing files strated...")
         sum_pooled_output, file_count = process_java_files(os.path.splitext(f.filename)[0])
+        print("processing files done...")
 
         # Remove the zip file
         os.remove(f.filename)
 
-        # Load PCA model
-        with open('models/pca.pkl', 'rb') as f:
-            pca = pickle.load(f)
-
         # Apply PCA on pooled output vector
-        pooled_output_pca = pca.transform(np.array(sum_pooled_output).reshape(1, -1))
+        pooled_output_pca = pca.transform(np.array(sum_pooled_output.detach().cpu().numpy()).reshape(1, -1))
 
-        # Load CatBoost model
-        with open('models/xgb_trained.pkl', 'rb') as f:
-            model = pickle.load(f)
-
+        print("pooled_output_pca: ", pooled_output_pca.shape)
+        
         # Make prediction using CatBoost model
         prediction = model.predict(pooled_output_pca)
         prediction = prediction[0] if isinstance(prediction, np.ndarray) else prediction
+        print(f"prediction:: {prediction}")
         # Determine design pattern based on prediction
         if prediction == 0:  # {'MVC': 0, 'MVP': 1, 'MVVM': 2, 'NONE': 3}
             pattern = "MVC"
@@ -239,4 +228,4 @@ def upload_file_handler():
 
 # Start the Flask application
 if __name__ == '__main__':
-   app.run(debug = True)
+   app.run(debug = True, use_reloader=False)
