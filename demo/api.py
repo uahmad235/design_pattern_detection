@@ -178,11 +178,11 @@ def upload_file_handler():
         rf.save(rf.filename)
 
         # Load PCA model
-        with open('models/pca.pkl', 'rb') as f:
+        with open('../models/pca.pkl', 'rb') as f:
             pca = pickle.load(f)
 
         # Load CatBoost model
-        with open('models/xgb_trained.pkl', 'rb') as f:
+        with open('../models/xgb_trained.pkl', 'rb') as f:
             model = pickle.load(f)
 
         f = rf
